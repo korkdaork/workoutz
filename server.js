@@ -1,72 +1,113 @@
+//DEPENDENCIES
 const express = require("express");
-const logger = require("morgan");
-const mongoose = require("mongoose");
+const bodyParser = require('body-parser');
+const path = require('path');
+const connectDB = require("./config/connectDB.js");
+const db = require("./models");
 
-const PORT = process.env.PORT || 3000;
+//EXPRESS APP
+let app = express();
 
-const db = require("./models.js");
+//POST REQUESTS
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
 
-const app = express();
+// Host Static Files so css and js files can be retrieved
+app.use(express.static(path.join(__dirname, '/public')));
 
-app.use(logger("dev"));
+//PORT
+let PORT = process.env.PORT || 9090;
 
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
 
-app.use(express.static("public"));
+//==============================================ROUTES========================================================================
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
-mongoose.connect(process.env.MONGODB_URI || "mongodb://localhost/populatedb", { useNewUrlParser: true });
+app.get("/exercise", (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'exercise.html'));
+});
 
-db.User.create({ name: "Ernest Hemingway" })
-  .then(dbUser => {
-    console.log(dbUser);
+app.get("/stats", (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'stats.html'));
+});
+
+app.get("/api/workouts", (req, res) => {
+  db.Workout.find({}).sort({ day: -1 }).limit(1)
+    .then(dbWorkout => {
+      res.json(dbWorkout);
+    })
+    .catch(err => {
+      res.json(err);
+    });
+});
+
+app.get("/api/workouts/range", (req, res) => {
+  db.Workout.find({})
+    .then(dbWorkout => {
+      res.json(dbWorkout);
+    })
+    .catch(err => {
+      res.json(err);
+    });
+});
+
+
+
+//PUT REQUESTS
+
+app.put("/api/workouts/:id", (req, res) => {
+
+  let urlData = req.params;
+  let data = req.body;
+  db.Workout.updateOne({ _id: urlData.id }, {
+    $push: {
+      exercises: [
+        {
+          "type": data.type,
+          "name": data.name,
+          "duration": data.duration,
+          "distance": data.distance,
+          "weight": data.weight,
+          "reps": data.reps,
+          "sets": data.sets
+        }
+      ]
+    }
+  }).then(dbUpdate => {
+    res.json(dbUpdate);
   })
-  .catch(({ message }) => {
-    console.log(message);
-  });
+    .catch(err => {
+      res.json(err);
+    });
 
-app.get("/notes", (req, res) => {
-  db.Note.find({})
-    .then(dbNote => {
-      res.json(dbNote);
-    })
+});
+
+
+//POST REQUESTS
+
+app.post("/api/workouts", (req, res) => {
+
+  let data = req.body;
+
+  db.Workout.create({
+    day: new Date().setDate(new Date().getDate())
+  }).then(dbUpdate => {
+    res.json(dbUpdate);
+  })
     .catch(err => {
       res.json(err);
     });
 });
 
-app.get("/user", (req, res) => {
-  db.User.find({})
-    .then(dbUser => {
-      res.json(dbUser);
-    })
-    .catch(err => {
-      res.json(err);
-    });
-});
 
-app.post("/submit", ({ body }, res) => {
-  db.Note.create(body)
-    .then(({ _id }) => db.User.findOneAndUpdate({}, { $push: { notes: _id } }, { new: true }))
-    .then(dbUser => {
-      res.json(dbUser);
-    })
-    .catch(err => {
-      res.json(err);
-    });
-});
 
-app.get("/populateduser", (req, res) => {
-  db.User.find({})
-    .populate("notes")
-    .then(dbUser => {
-      res.json(dbUser);
-    })
-    .catch(err => {
-      res.json(err);
-    });
-});
 
-app.listen(PORT, () => {
-  console.log(`App running on port ${PORT}!`);
+/******************************* Connect to db  ****************************/
+connectDB()
+
+// Start our server so that it can begin listening to client requests.
+app.listen(PORT, function () {
+  // Log (server-side) when our server has started
+  console.log("Server listening on: http://localhost:" + PORT);
 });
